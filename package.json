@@ -12,6 +12,7 @@
     "tv4": "1.0.12",
     "async": "0.2.9",
     "sugar": "1.4.1",
+    "methods": "0.0.1",
     "express": "3.4.8",
     "coffee-script": "1.6.3",
     "fast-json-patch": "0.3.6"
