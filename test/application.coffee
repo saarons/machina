@@ -91,7 +91,53 @@ describe "Application", ->
         it "should return 405", (done) ->
           request(@app)[method]("/people/1").expect(405, done)
 
-  describe "with blacklist_paths", ->
+  describe "with authentication enabled", ->
+    beforeEach -> 
+      setup @,
+        adapter:
+          create: (resource, item, options, callback) -> callback(null, item)
+          authenticate: (token, callback) -> 
+            if token
+              callback(null, true)
+            else
+              callback(true, null)
+        settings:
+          schema: test_schema
+          authentication: true
+          public_methods: ["GET"]
+          resource_methods: ["POST"]
+
+    describe "GET /<resource>", ->
+      it "should return 200 even when no credentials are provided", (done) ->
+        body = [
+          {first_name: "Sam", last_name: "Aarons", age: 21},
+          {first_name: "Etan", last_name: "Zapinsky", age: 22}
+        ]
+
+        @adapter.find = sinon.stub().callsArgWith(3, null, body)
+
+        request(@app)
+          .get("/people")
+          .expect(200, {people: body}, done)
+
+    describe "POST /<resource>", ->
+      it "should return 401 when no credentials are provided", (done) ->
+        request(@app)
+          .post("/people")
+          .expect(401, done)
+
+      it "should return 201 when credentials are provided", (done) ->
+        payload = [
+          {first_name: "Sam", last_name: "Aarons", age: 21}
+        ]
+
+        request(@app)
+          .post("/people")
+          .auth("sam", "keep_this_secret")
+          .send(payload)
+          .expect(201, done)
+
+  describe "with blacklist_paths enabled", ->
     beforeEach ->
       setup @,
         adapter:

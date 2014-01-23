@@ -21,7 +21,7 @@ defaults =
   item_lookup: true
   item_methods: ["GET"]
   public_item_methods: []
-  authorization: false
+  authentication: false
   server_name: "localhost:5000"
   url_prefix: ""
   api_version: "",
@@ -54,17 +54,18 @@ module.exports = class Application
         @sanitize(resource, object) for object in results unless options.update
         callback(null, results)
 
-  buildAuthMiddleware: (authorization, public_methods, private_methods, resource) ->
+  buildAuthMiddleware: (authentication, public_methods, private_methods, resource) ->
     (req, res, next) =>
-      if authorization
-        if public_methods.indexOf(req.real_method()) > -1 && private_methods.indexOf(req.real_method()) > -1
+      method = req.real_method()
+      if authentication
+        if public_methods.indexOf(method) > -1 && private_methods.indexOf(method) > -1
           # If it's in both, we can authenticate but not error out if the auth fails
-          @adapter.authorize req.get("Authorization"), resource, req.real_method(), (err, authObject) ->
-            req.machina.auth = authObject if !err && authObject
+          @adapter.authenticate req.get("Authorization"), (err, authObject) ->
+            req.machina.auth = authObject unless err
             next()
-        else if private_methods.indexOf(req.real_method()) > -1
-          @adapter.authorize req.get("Authorization"), resource, req.real_method(), (err, authObject) ->
-            if err || !authObject
+        else if private_methods.indexOf(method) > -1
+          @adapter.authenticate req.get("Authorization"), (err, authObject) ->
+            if err
               res.send(401)
             else
               req.machina.auth = authObject
@@ -161,7 +162,7 @@ module.exports = class Application
       )
 
       resource_auth_middleware = @buildAuthMiddleware(
-        config.authorization,
+        config.authentication,
         config.public_methods,
         config.resource_methods,
         resource
@@ -304,7 +305,7 @@ module.exports = class Application
       )
 
       item_auth_middleware = @buildAuthMiddleware(
-        config.authorization,
+        config.authentication,
         config.item_methods,
         config.public_item_methods,
         resource
