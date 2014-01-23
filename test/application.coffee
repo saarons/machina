@@ -91,6 +91,105 @@ describe "Application", ->
         it "should return 405", (done) ->
           request(@app)[method]("/people/1").expect(405, done)
 
+  describe "with blacklist_paths", ->
+    beforeEach ->
+      setup @,
+        adapter:
+          create: (resource, item, options, callback) -> callback(null, item)
+          update: (resource, key, object, options, callback) -> callback(null, object)
+        settings:
+          schema: test_schema
+          blacklist_paths: ["/last_name"]
+          resource_methods: ["GET", "POST"]
+          item_methods: ["GET", "PUT", "PATCH"]
+
+    describe "GET /<resource>", ->
+      it "should sanitize paths properly", (done) ->
+        body = [
+          {first_name: "Sam", last_name: "Aarons", age: 21},
+          {first_name: "Etan", last_name: "Zapinsky", age: 22}
+        ]
+
+        @adapter.find = sinon.stub().callsArgWith(3, null, body)
+
+        expected = [
+          {first_name: "Sam", age: 21},
+          {first_name: "Etan", age: 22}
+        ]
+
+        request(@app)
+          .get("/people")
+          .expect(200, {people: expected}, done)
+
+    describe "GET /<resource>/<key>", ->
+      it "should sanitize paths properly", (done) ->
+        body = [
+          {first_name: "Sam", last_name: "Aarons", age: 21},
+        ]
+
+        @adapter.find = sinon.stub().callsArgWith(3, null, body)
+
+        expected = [
+          {first_name: "Sam", age: 21},
+        ]
+
+        request(@app)
+          .get("/people/sam")
+          .expect(200, {people: expected}, done)
+
+    describe "POST /<resource>", ->
+      it "should sanitize paths properly", (done) ->
+        payload = [
+          {first_name: "Sam", last_name: "Aarons", age: 21}
+        ]
+
+        expected = [
+          {first_name: "Sam", age: 21}
+        ]
+
+        request(@app)
+          .post("/people")
+          .send(payload)
+          .expect(201, {people: expected}, done)
+
+    describe "PATCH /<resource>/<key>", ->
+      it "should sanitize paths properly", (done) ->
+        payload = [
+          [
+            {op: "replace", path: "/age", value: 22},
+          ]
+        ]
+
+        records = [
+          first_name: "Sam", last_name: "Aarons", age: 21
+        ]
+
+        expected = [
+          first_name: "Sam", age: 22
+        ]
+
+        @adapter.find = sinon.stub().callsArgWith(3, null, records)
+
+        request(@app)
+          .patch("/people/sam")
+          .send(payload)
+          .expect(200, {people: expected}, done)
+
+    describe "PUT /<resource>/<key>", ->
+      it "should sanitize paths properly", (done) ->
+        payload = [
+          {first_name: "Sam", last_name: "Aarons", age: 22}
+        ]
+
+        expected = [
+          {first_name: "Sam", age: 22}
+        ]
+
+        request(@app)
+          .put("/people/sam")
+          .send(payload)
+          .expect(200, {people: expected}, done)
+
   describe "with item_lookup set to false", ->
     beforeEach ->
       setup @,
