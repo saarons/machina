@@ -84,8 +84,8 @@ describe "Adapter", ->
           .send(payload)
           .end ->
             expect(stub).callCount(payload.length)
-            for obj in payload
-              expect(stub).calledWith("people", obj, {}, sinon.match.func)
+            for obj, i in payload
+              expect(stub.getCall(i)).calledWith("people", obj, {}, sinon.match.func)
             done()
 
   describe "with DELETE enabled", ->
@@ -172,8 +172,8 @@ describe "Adapter", ->
           .send(payload)
           .end ->
             expect(stub).callCount(payload.length)
-            for obj in payload.zip(ids)
-              expect(stub).calledWith("people", obj[1], obj[0], {update: true}, sinon.match.func)
+            for obj, i in payload.zip(ids)
+              expect(stub.getCall(i)).calledWith("people", obj[1], obj[0], {update: true}, sinon.match.func)
             done()
 
   describe "with PATCH enabled", ->
@@ -244,7 +244,7 @@ describe "Adapter", ->
 
             expect(update_stub).callCount(records.length)
 
-            for obj in records.zip(ids)
-              expect(update_stub).calledWith("people", obj[1], obj[0], {update: true}, sinon.match.func)
+            for obj, i in records.zip(ids)
+              expect(update_stub.getCall(i)).calledWith("people", obj[1], obj[0], {update: true}, sinon.match.func)
 
             done()
