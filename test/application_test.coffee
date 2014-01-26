@@ -1,7 +1,7 @@
 sinon = require("sinon")
 request = require("supertest")
 expect = require("chai").expect
-helpers = require("./spec_helper")
+helpers = require("./test_helper")
 
 describe "Application", ->
   describe "with default settings", ->
