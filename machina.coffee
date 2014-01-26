@@ -390,6 +390,7 @@ module.exports = class Application
         "PUT": item_PUT
         "PATCH": item_PATCH
         "DELETE": item_DELETE
+        "OPTIONS": resource_OPTIONS
 
       methods.each (method) ->
         router[method] item_path, item_middleware, (req, res) -> 

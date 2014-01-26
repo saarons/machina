@@ -254,13 +254,19 @@ describe "Application", ->
         settings:
           schema: test_schema
           resource_methods: ["GET", "POST", "DELETE", "OPTIONS"]
-          item_methods: ["GET", "PUT", "PATCH", "DELETE"]
+          item_methods: ["GET", "PUT", "PATCH", "DELETE", "OPTIONS"]
           item_uri_template: "{last_name}"
 
     describe "OPTIONS /<resource>", ->
       it "should return 200", (done) ->
         request(@app)
           .options("/people")
+          .expect(200, done)
+
+    describe "OPTIONS /<resource>/<key>", ->
+      it "should return 200", (done) ->
+        request(@app)
+          .options("/people/1")
           .expect(200, done)
 
   describe "with PUT enabled", ->
