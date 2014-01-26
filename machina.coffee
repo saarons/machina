@@ -166,7 +166,7 @@ module.exports = class Application
 
         resource_OPTIONS = (req, res) =>
           response = Object.clone(config.schema, true)
-          response.links = []
+          response.links ||= []
           response.definitions ||= {}
           
           resource_methods =
@@ -179,7 +179,9 @@ module.exports = class Application
               rel: "create"
               href: resource_path
               schema: 
-                $ref: "#"
+                type: "array"
+                items:
+                  $ref: "#"
             "DELETE":
               method: "DELETE"
               rel: "destroy"
@@ -196,7 +198,9 @@ module.exports = class Application
               rel: "update"
               href: item_path
               schema:
-                $ref: "#"
+                type: "array"
+                items:
+                  $ref: "#"
             "PATCH":
               method: "PATCH"
               rel: "update"
