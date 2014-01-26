@@ -254,7 +254,7 @@ module.exports = class Application
             resource_endpoints[req.real_method()](req, res)
 
         item_GET = (req, res) =>
-          @find resource, [req.params.lookup], req.machina, (err, results) ->
+          @find resource, req.params.lookup.split(","), req.machina, (err, results) ->
             if err
               res.send(500)
             else
@@ -264,7 +264,7 @@ module.exports = class Application
 
         item_PATCH = (req, res) =>
           req.machina.update = true
-          keys = [req.params.lookup]
+          keys = req.params.lookup.split(",")
 
           updateItem = (memo, item, callback) =>
             [object, patches, key] = item
@@ -361,7 +361,7 @@ module.exports = class Application
               res.send(207, response)
 
         item_DELETE = (req, res) =>
-          keys = [req.params.lookup]
+          keys = req.params.lookup.split(",")
 
           @adapter.delete resource, keys, req.machina, (err, success) ->
             status_code = if err then 500
