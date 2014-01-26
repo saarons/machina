@@ -74,4 +74,37 @@ describe "Adapter", ->
             expect(stub).callCount(payload.length)
             for obj in payload
               expect(stub).calledWith("people", obj, {}, sinon.match.func)
-            done()        
+            done()
+
+  describe "with DELETE enabled", ->
+    beforeEach ->
+      helpers.setup @,
+        settings:
+          item_methods: ["DELETE"]
+          resource_methods: ["DELETE"]
+
+    describe "DELETE /<resource>", ->
+      it "should call #delete with the proper arguments", (done) ->
+        stub = sinon.stub()
+
+        @adapter.delete = stub.callsArgWith(3, null, true)
+
+        request(@app)
+          .del("/people")
+          .end ->
+            expect(stub).calledOnce
+            expect(stub).calledWith("people", null, {}, sinon.match.func)
+            done()
+
+    describe "DELETE /<resource>/<key>", ->
+      it "should call #delete with the proper arguments", (done) ->
+        stub = sinon.stub()
+
+        @adapter.delete = stub.callsArgWith(3, null, true)
+
+        request(@app)
+          .del("/people/1")
+          .end ->
+            expect(stub).calledOnce
+            expect(stub).calledWith("people", ["1"], {}, sinon.match.func)
+            done()
