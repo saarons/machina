@@ -31,7 +31,7 @@ defaults =
   public_item_methods: []
   item_uri_template: null
   authentication: false
-  server_name: "localhost:5000"
+  server_name: "http://localhost:5000"
   url_prefix: null
   api_version: null,
   blacklist_paths: []
