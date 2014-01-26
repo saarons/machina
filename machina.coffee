@@ -105,172 +105,227 @@ module.exports = class Application
       req.machina = {}
       next()
 
-    for resource, config of @options.resources
-      config = @config(resource)
+    for resource of @options.resources
+      do (config = @config(resource)) =>
+        resource_path = "/#{resource}"
+        resource_path = "/#{@options.api_version}" + resource_path if @options.api_version
+        resource_path = "/#{@options.url_prefix}" + resource_path if @options.url_prefix
 
-      resource_path = "/#{resource}"
-      resource_path = "/#{@options.api_version}" + resource_path if @options.api_version
-      resource_path = "/#{@options.url_prefix}" + resource_path if @options.url_prefix
+        resource_GET = (req, res) =>
+          @find resource, null, req.machina, (err, results) ->
+            if err
+              res.send(500)
+            else
+              response = {}
+              response[resource] = results
+              res.json(response)
 
-      resource_GET = (req, res) =>
-        @find resource, null, req.machina, (err, results) ->
-          if err
-            res.send(500)
-          else
-            response = {}
-            response[resource] = results
-            res.json(response)
+        resource_DELETE = (req, res) =>
+          @adapter.delete resource, null, req.machina, (err, success) ->
+            status_code = if err then 500
+            else if success then 204
+            else 422
+            res.send(status_code)
 
-      resource_DELETE = (req, res) =>
-        @adapter.delete resource, null, req.machina, (err, success) ->
-          status_code = if err then 500
-          else if success then 204
-          else 422
-          res.send(status_code)
+        resource_POST = (req, res) =>
+          createItem = (memo, item, callback) =>
+            patches = config.blacklist_paths_on_create.map (path) ->
+              {"op": "remove", path: path}
 
-      resource_POST = (req, res) =>
-        createItem = (memo, item, callback) =>
-          patches = config.blacklist_paths_on_create.map (path) ->
-            {"op": "remove", path: path}
+            jsonpatch.apply(item, patches)
 
-          jsonpatch.apply(item, patches)
+            validation_result = tv4.validateMultiple(item, config.schema)
 
-          validation_result = tv4.validateMultiple(item, config.schema)
-
-          if validation_result.valid
-            @adapter.create resource, item, req.machina, (err, result) =>
-              if err
-                memo[1].push(err)
-                memo[0].push(null)
-              else
-                @sanitize(resource, result)
-                memo[0].push(result)
+            if validation_result.valid
+              @adapter.create resource, item, req.machina, (err, result) =>
+                if err
+                  memo[1].push(err)
+                  memo[0].push(null)
+                else
+                  @sanitize(resource, result)
+                  memo[0].push(result)
+                callback(null, memo)
+            else
+              memo[1].push validation_result.errors
+              memo[0].push(null)
               callback(null, memo)
-          else
-            memo[1].push validation_result.errors
-            memo[0].push(null)
-            callback(null, memo)
 
-        async.reduce req.body, [[],[]], createItem, (err, result) ->
-          [results, errors] = result
+          async.reduce req.body, [[],[]], createItem, (err, result) ->
+            [results, errors] = result
 
-          response = {}
-          response.errors = errors unless errors.isEmpty()
-          response[resource] = results
-
-          if errors.isEmpty()
-            res.send(201, response)
-          else if response[resource].every((x) -> x == null)
-            res.send(422, response)
-          else
-            res.send(207, response)
-
-      resource_OPTIONS = (req, res) =>
-        response = Object.clone(config.schema, true)
-        response.links = []
-        response.definitions ||= {}
-        
-        resource_methods =
-          "GET": 
-            method: "GET"
-            rel: "instances"
-            href: resource_path
-          "POST":
-            method: "POST"
-            rel: "create"
-            href: resource_path
-            schema: 
-              $ref: "#"
-          "DELETE":
-            method: "DELETE"
-            rel: "destroy"
-            href: resource_path
-
-        item_path = "#{resource_path}/#{config.item_uri_template}"
-        item_methods =
-          "GET":
-            method: "GET"
-            rel: "self"
-            href: item_path
-          "PUT":
-            method: "PUT"
-            rel: "update"
-            href: item_path
-            schema:
-              $ref: "#"
-          "PATCH":
-            method: "PATCH"
-            rel: "update"
-            href: item_path
-            schema:
-              $ref: "#/definitions/jsonpatch"
-          "DELETE":
-            method: "DELETE"
-            rel: "destroy"
-            href: item_path
-
-        enabled_resource_methods = config.resource_methods.union(config.public_methods)
-        for resource_method in enabled_resource_methods when resource_method isnt "OPTIONS"
-          response.links.push(resource_methods[resource_method])
-
-        if config.item_lookup && config.item_uri_template?
-          enabled_item_methods = config.item_methods.union(config.public_item_methods)
-          for item_method in enabled_item_methods when item_method isnt "OPTIONS"
-            if item_method == "PATCH"
-              response.definitions.jsonpatch = put_schema
-            response.links.push(item_methods[item_method])
-
-        res.json response
-
-      resource_method_not_allowed_middlware = @buildMethodNotAllowedMiddleware(
-        config, 
-        "resource"
-      )
-
-      resource_auth_middleware = @buildAuthMiddleware(
-        config.authentication,
-        config.public_methods,
-        config.resource_methods,
-        resource
-      )
-
-      resource_middleware = [
-        init,
-        resource_method_not_allowed_middlware,
-        resource_auth_middleware
-      ]
-
-      resource_endpoints =
-        "GET": resource_GET
-        "POST": resource_POST
-        "DELETE": resource_DELETE
-        "OPTIONS": resource_OPTIONS
-
-      methods.each (method) ->
-        router[method] resource_path, resource_middleware, (req, res) -> 
-          resource_endpoints[req.real_method()](req, res)
-
-      item_GET = (req, res) =>
-        @find resource, [req.params.lookup], req.machina, (err, results) ->
-          if err
-            res.send(500)
-          else
             response = {}
+            response.errors = errors unless errors.isEmpty()
             response[resource] = results
-            res.json(response)
 
-      item_PATCH = (req, res) =>
-        req.machina.update = true
-        keys = [req.params.lookup]
+            if errors.isEmpty()
+              res.send(201, response)
+            else if response[resource].every((x) -> x == null)
+              res.send(422, response)
+            else
+              res.send(207, response)
 
-        updateItem = (memo, item, callback) =>
-          [object, patches, key] = item
+        resource_OPTIONS = (req, res) =>
+          response = Object.clone(config.schema, true)
+          response.links = []
+          response.definitions ||= {}
+          
+          resource_methods =
+            "GET": 
+              method: "GET"
+              rel: "instances"
+              href: resource_path
+            "POST":
+              method: "POST"
+              rel: "create"
+              href: resource_path
+              schema: 
+                $ref: "#"
+            "DELETE":
+              method: "DELETE"
+              rel: "destroy"
+              href: resource_path
 
-          patches.remove (operation) ->
-            config.blacklist_paths_on_update.some (path) ->
-              operation.path.startsWith(path)
+          item_path = "#{resource_path}/#{config.item_uri_template}"
+          item_methods =
+            "GET":
+              method: "GET"
+              rel: "self"
+              href: item_path
+            "PUT":
+              method: "PUT"
+              rel: "update"
+              href: item_path
+              schema:
+                $ref: "#"
+            "PATCH":
+              method: "PATCH"
+              rel: "update"
+              href: item_path
+              schema:
+                $ref: "#/definitions/jsonpatch"
+            "DELETE":
+              method: "DELETE"
+              rel: "destroy"
+              href: item_path
 
-          if jsonpatch.apply(object, patches)
+          enabled_resource_methods = config.resource_methods.union(config.public_methods)
+          for resource_method in enabled_resource_methods when resource_method isnt "OPTIONS"
+            response.links.push(resource_methods[resource_method])
+
+          if config.item_lookup && config.item_uri_template?
+            enabled_item_methods = config.item_methods.union(config.public_item_methods)
+            for item_method in enabled_item_methods when item_method isnt "OPTIONS"
+              if item_method == "PATCH"
+                response.definitions.jsonpatch = put_schema
+              response.links.push(item_methods[item_method])
+
+          res.json response
+
+        resource_method_not_allowed_middlware = @buildMethodNotAllowedMiddleware(
+          config, 
+          "resource"
+        )
+
+        resource_auth_middleware = @buildAuthMiddleware(
+          config.authentication,
+          config.public_methods,
+          config.resource_methods,
+          resource
+        )
+
+        resource_middleware = [
+          init,
+          resource_method_not_allowed_middlware,
+          resource_auth_middleware
+        ]
+
+        resource_endpoints =
+          "GET": resource_GET
+          "POST": resource_POST
+          "DELETE": resource_DELETE
+          "OPTIONS": resource_OPTIONS
+
+        methods.each (method) ->
+          router[method] resource_path, resource_middleware, (req, res) -> 
+            resource_endpoints[req.real_method()](req, res)
+
+        item_GET = (req, res) =>
+          @find resource, [req.params.lookup], req.machina, (err, results) ->
+            if err
+              res.send(500)
+            else
+              response = {}
+              response[resource] = results
+              res.json(response)
+
+        item_PATCH = (req, res) =>
+          req.machina.update = true
+          keys = [req.params.lookup]
+
+          updateItem = (memo, item, callback) =>
+            [object, patches, key] = item
+
+            patches.remove (operation) ->
+              config.blacklist_paths_on_update.some (path) ->
+                operation.path.startsWith(path)
+
+            if jsonpatch.apply(object, patches)
+              validation_result = tv4.validateMultiple(object, config.schema)
+              if validation_result.valid
+                @adapter.update resource, key, object, req.machina, (err, result) =>
+                  if err
+                    memo[1].push(err)
+                    memo[0].push(null)
+                  else
+                    @sanitize(resource, result)
+                    memo[0].push(result)
+
+                  callback(null, memo)
+              else
+                memo[1].push(validation_result.errors)
+                memo[0].push(null)
+                callback(null, memo)
+            else
+              memo[1].push(false)
+              memo[0].push(null)
+              callback(null, memo)
+
+          validation_result = tv4.validateMultiple(req.body, put_schema)
+          if validation_result.valid            
+            @find resource, keys, req.machina, (err, results) ->
+              if err
+                res.send(500)
+              else
+                async.reduce results.zip(req.body, keys), [[],[]], updateItem, (err, result) ->
+                  [results, errors] = result
+
+                  response = {}
+                  response.errors = errors unless errors.isEmpty()
+                  response[resource] = results
+
+                  if errors.isEmpty()
+                    res.send(200, response)
+                  else if response[resource].every((x) -> x == null)
+                    res.send(422, response)
+                  else
+                    res.send(207, response)
+
+            res.send(200)
+          else
+            res.json(400, {errors: validation_result.errors})
+
+        item_PUT = (req, res) =>
+          req.machina.update = true
+          keys = req.params.lookup.split(",")
+
+          updateItem = (memo, item, callback) =>
+            [key, object] = item
+
+            patches = config.blacklist_paths_on_update.map (path) ->
+              {"op": "remove", path: path}
+
+            jsonpatch.apply(object, patches)
+
             validation_result = tv4.validateMultiple(object, config.schema)
             if validation_result.valid
               @adapter.update resource, key, object, req.machina, (err, result) =>
@@ -286,116 +341,60 @@ module.exports = class Application
               memo[1].push(validation_result.errors)
               memo[0].push(null)
               callback(null, memo)
-          else
-            memo[1].push(false)
-            memo[0].push(null)
-            callback(null, memo)
 
-        validation_result = tv4.validateMultiple(req.body, put_schema)
-        if validation_result.valid            
-          @find resource, keys, req.machina, (err, results) ->
-            if err
-              res.send(500)
+          async.reduce keys.zip(req.body), [[], []], updateItem, (err, result) ->
+            [results, errors] = result
+
+            response = {}
+            response.errors = errors unless errors.isEmpty()
+            response[resource] = results
+
+            if errors.isEmpty()
+              res.send(200, response)
+            else if response[resource].every((x) -> x == null)
+              res.send(422, response)
             else
-              async.reduce results.zip(req.body, keys), [[],[]], updateItem, (err, result) ->
-                [results, errors] = result
+              res.send(207, response)
 
-                response = {}
-                response.errors = errors unless errors.isEmpty()
-                response[resource] = results
+        item_DELETE = (req, res) =>
+          keys = [req.params.lookup]
 
-                if errors.isEmpty()
-                  res.send(200, response)
-                else if response[resource].every((x) -> x == null)
-                  res.send(422, response)
-                else
-                  res.send(207, response)
+          @adapter.delete resource, keys, req.machina, (err, success) ->
+            status_code = if err then 500
+            else if success then 204
+            else 422
+            res.send(status_code)
 
-          res.send(200)
-        else
-          res.json(400, {errors: validation_result.errors})
+        item_method_not_allowed_middleware = @buildMethodNotAllowedMiddleware(
+          config, 
+          "item"
+        )
 
-      item_PUT = (req, res) =>
-        req.machina.update = true
-        keys = req.params.lookup.split(",")
+        item_auth_middleware = @buildAuthMiddleware(
+          config.authentication,
+          config.item_methods,
+          config.public_item_methods,
+          resource
+        )
 
-        updateItem = (memo, item, callback) =>
-          [key, object] = item
+        item_middleware = [
+          init,
+          item_method_not_allowed_middleware,
+          item_auth_middleware
+        ]
 
-          patches = config.blacklist_paths_on_update.map (path) ->
-            {"op": "remove", path: path}
+        item_path = "#{resource_path}/:lookup"
+        item_endpoints =
+          "GET": item_GET
+          "PUT": item_PUT
+          "PATCH": item_PATCH
+          "DELETE": item_DELETE
+          "OPTIONS": resource_OPTIONS
 
-          jsonpatch.apply(object, patches)
+        methods.each (method) ->
+          router[method] item_path, item_middleware, (req, res) -> 
+            item_endpoints[req.real_method()](req, res)
 
-          validation_result = tv4.validateMultiple(object, config.schema)
-          if validation_result.valid
-            @adapter.update resource, key, object, req.machina, (err, result) =>
-              if err
-                memo[1].push(err)
-                memo[0].push(null)
-              else
-                @sanitize(resource, result)
-                memo[0].push(result)
-
-              callback(null, memo)
-          else
-            memo[1].push(validation_result.errors)
-            memo[0].push(null)
-            callback(null, memo)
-
-        async.reduce keys.zip(req.body), [[], []], updateItem, (err, result) ->
-          [results, errors] = result
-
-          response = {}
-          response.errors = errors unless errors.isEmpty()
-          response[resource] = results
-
-          if errors.isEmpty()
-            res.send(200, response)
-          else if response[resource].every((x) -> x == null)
-            res.send(422, response)
-          else
-            res.send(207, response)
-
-      item_DELETE = (req, res) =>
-        keys = [req.params.lookup]
-
-        @adapter.delete resource, keys, req.machina, (err, success) ->
-          status_code = if err then 500
-          else if success then 204
-          else 422
-          res.send(status_code)
-
-      item_method_not_allowed_middleware = @buildMethodNotAllowedMiddleware(
-        config, 
-        "item"
-      )
-
-      item_auth_middleware = @buildAuthMiddleware(
-        config.authentication,
-        config.item_methods,
-        config.public_item_methods,
-        resource
-      )
-
-      item_middleware = [
-        init,
-        item_method_not_allowed_middleware,
-        item_auth_middleware
-      ]
-
-      item_path = "#{resource_path}/:lookup"
-      item_endpoints =
-        "GET": item_GET
-        "PUT": item_PUT
-        "PATCH": item_PATCH
-        "DELETE": item_DELETE
-        "OPTIONS": resource_OPTIONS
-
-      methods.each (method) ->
-        router[method] item_path, item_middleware, (req, res) -> 
-          item_endpoints[req.real_method()](req, res)
-    
     router.middleware
 
   router: ->
