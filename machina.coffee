@@ -156,6 +156,32 @@ module.exports = class Application
           else
             res.send(207, response)
 
+      resource_OPTIONS = (req, res) =>
+        response = Object.clone(config.schema, true)
+        response.links = []
+        
+        resource_methods =
+          "GET": 
+            method: "GET"
+            rel: "instances"
+            href: resource_path
+          "POST":
+            method: "POST"
+            rel: "create"
+            href: resource_path
+            schema: 
+              $ref: "#"
+          "DELETE":
+            method: "DELETE"
+            rel: "destroy"
+            href: resource_path
+
+        enabled_methods = config.resource_methods.union(config.public_methods)
+        for resource_method in enabled_methods when resource_method isnt "OPTIONS"
+          response.links.push(resource_methods[resource_method])
+
+        res.json response
+
       resource_method_not_allowed_middlware = @buildMethodNotAllowedMiddleware(
         config, 
         "resource"
@@ -178,6 +204,7 @@ module.exports = class Application
         "GET": resource_GET
         "POST": resource_POST
         "DELETE": resource_DELETE
+        "OPTIONS": resource_OPTIONS
 
       methods.each (method) ->
         router[method] resource_path, resource_middleware, (req, res) -> 
@@ -320,8 +347,8 @@ module.exports = class Application
       item_path = "#{resource_path}/:lookup"
       item_endpoints =
         "GET": item_GET
-        "PATCH": item_PATCH
         "PUT": item_PUT
+        "PATCH": item_PATCH
         "DELETE": item_DELETE
 
       methods.each (method) ->

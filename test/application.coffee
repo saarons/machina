@@ -248,6 +248,20 @@ describe "Application", ->
         it "should return 405", (done) ->
           request(@app)[method]("/people/1").expect(405, done)
 
+  describe "with OPTIONS enabled", ->
+    beforeEach ->
+      setup @,
+        settings:
+          schema: test_schema
+          resource_methods: ["GET", "POST", "DELETE", "OPTIONS"]
+          item_methods: ["GET", "PUT", "PATCH", "DELETE"]
+
+    describe "OPTIONS /<resource>", ->
+      it "should return 200", (done) ->
+        request(@app)
+          .options("/people")
+          .expect(200, done)
+
   describe "with PUT enabled", ->
     beforeEach -> 
       setup @,
