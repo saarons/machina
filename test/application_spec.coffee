@@ -1,55 +1,11 @@
-chai = require("chai")
 sinon = require("sinon")
-express = require("express")
 request = require("supertest")
-Machina = require("../machina")
-
-expect = chai.expect
-Assertion = chai.Assertion
-
-Assertion.addProperty 'error_response', (resource = "people") ->
-  new Assertion(@_obj).to.contain.keys("errors", resource)
-
-  num_errors = @_obj[resource].count(null)
-  new Assertion(@_obj.errors).to.have.length(num_errors)
-
-resource_methods = 
-  POST: "post"
-  GET: "get"
-  DELETE: "del"
-
-item_methods = 
-  GET: "get"
-  PUT: "put"
-  PATCH: "patch"
-  DELETE: "del"
-
-test_schema = 
-  type: "object"
-  properties:
-    first_name:
-      type: "string"
-    last_name:
-      type: "string"
-    age:
-      type: "integer"
-      minimum: 0
-  required: ["first_name", "last_name"]
-
-setup = (context, options = {}) ->
-  context.app = express()
-  context.adapter = options.adapter || {}
-  context.settings = options.settings || {}
-  context.machina = new Machina
-    adapter: context.adapter
-    resources:
-      people: context.settings
-  context.app.use(express.json())
-  context.app.use(context.machina.router())
+expect = require("chai").expect
+helpers = require("./spec_helper")
 
 describe "Application", ->
   describe "with default settings", ->
-    beforeEach -> setup(@)
+    beforeEach -> helpers.setup(@)
 
     describe "GET /<resource>", ->
       it "should return 200 when there is no error", (done) ->
@@ -81,19 +37,19 @@ describe "Application", ->
           .get("/people")
           .expect(200, {people: body}, done)
 
-    for verb, method of resource_methods when verb isnt "GET"
+    for verb, method of helpers.resource_methods when verb isnt "GET"
       describe "#{verb} /<resource>", ->
         it "should return 405", (done) ->
           request(@app)[method]("/people").expect(405, done)
 
-    for verb, method of item_methods when verb isnt "GET"
+    for verb, method of helpers.item_methods when verb isnt "GET"
       describe "#{verb} /<resource>/<key>", ->
         it "should return 405", (done) ->
           request(@app)[method]("/people/1").expect(405, done)
 
   describe "with authentication enabled", ->
     beforeEach -> 
-      setup @,
+      helpers.setup @,
         adapter:
           create: (resource, item, options, callback) -> callback(null, item)
           authenticate: (token, callback) -> 
@@ -102,7 +58,7 @@ describe "Application", ->
             else
               callback(true, null)
         settings:
-          schema: test_schema
+          schema: helpers.test_schema
           authentication: true
           public_methods: ["GET"]
           resource_methods: ["POST"]
@@ -139,12 +95,12 @@ describe "Application", ->
 
   describe "with blacklist_paths enabled", ->
     beforeEach ->
-      setup @,
+      helpers.setup @,
         adapter:
           create: (resource, item, options, callback) -> callback(null, item)
           update: (resource, key, object, options, callback) -> callback(null, object)
         settings:
-          schema: test_schema
+          schema: helpers.test_schema
           blacklist_paths: ["/last_name"]
           resource_methods: ["GET", "POST"]
           item_methods: ["GET", "PUT", "PATCH"]
@@ -238,21 +194,21 @@ describe "Application", ->
 
   describe "with item_lookup set to false", ->
     beforeEach ->
-      setup @,
+      helpers.setup @,
         settings:
           item_lookup: false
           item_methods: ["GET", "PATCH", "PUT", "DELETE"]        
 
-    for verb, method of item_methods
+    for verb, method of helpers.item_methods
       describe "#{verb} /<resource>/<key>", ->
         it "should return 405", (done) ->
           request(@app)[method]("/people/1").expect(405, done)
 
   describe "with OPTIONS enabled", ->
     beforeEach ->
-      setup @,
+      helpers.setup @,
         settings:
-          schema: test_schema
+          schema: helpers.test_schema
           resource_methods: ["GET", "POST", "DELETE", "OPTIONS"]
           item_methods: ["GET", "PUT", "PATCH", "DELETE", "OPTIONS"]
           item_uri_template: "{last_name}"
@@ -271,11 +227,11 @@ describe "Application", ->
 
   describe "with PUT enabled", ->
     beforeEach -> 
-      setup @,
+      helpers.setup @,
         adapter:
           update: (resource, key, object, options, callback) -> callback(null, object)
         settings:
-          schema: test_schema
+          schema: helpers.test_schema
           item_methods: ["PUT"]
 
     describe "PUT /<resource>/<key>", ->
@@ -344,11 +300,11 @@ describe "Application", ->
 
   describe "with PATCH enabled", ->
     beforeEach ->
-      setup @,
+      helpers.setup @,
         adapter:
           update: (resource, key, object, options, callback) -> callback(null, object)
         settings:
-          schema: test_schema
+          schema: helpers.test_schema
           item_methods: ["PATCH"]
 
     describe "PATCH /<resource>/<key>", ->
@@ -487,11 +443,11 @@ describe "Application", ->
 
   describe "with POST enabled", ->
     beforeEach ->
-      setup @,
+      helpers.setup @,
         adapter:
           create: (resource, item, options, callback) -> callback(null, item)
         settings:
-          schema: test_schema
+          schema: helpers.test_schema
           resource_methods: ["POST"]        
 
     describe "POST /<resource>", ->
@@ -559,7 +515,7 @@ describe "Application", ->
 
   describe "with DELETE enabled", ->
     beforeEach ->
-      setup @,
+      helpers.setup @,
         settings:
           item_methods: ["DELETE"]
           resource_methods: ["DELETE"]
