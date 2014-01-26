@@ -1,28 +1,26 @@
 module.exports = {
     "title": "JSON Patch",
+    "description": "A JSON Schema describing a JSON Patch",
     "$schema": "http://json-schema.org/draft-04/schema#",
+    "notes": [
+        "Only required members are accounted for, other members are ignored"
+    ],
     "type": "array",
     "items": {
-      "$ref": "#/definitions/cluster"    
+        "description": "one JSON Patch operation",
+        "allOf": [
+            {
+                "description": "Members common to all operations",
+                "type": "object",
+                "required": [ "op", "path" ],
+                "properties": {
+                    "path": { "$ref": "#/definitions/jsonPointer" }
+                }
+            },
+            { "$ref": "#/definitions/oneOperation" }
+        ]
     },
     "definitions": {
-        "cluster": {
-            "type": "array",
-            "items": {
-                "description": "one JSON Patch operation",
-                "allOf": [
-                    {
-                        "description": "Members common to all operations",
-                        "type": "object",
-                        "required": [ "op", "path" ],
-                        "properties": {
-                            "path": { "$ref": "#/definitions/jsonPointer" }
-                        }
-                    },
-                    { "$ref": "#/definitions/oneOperation" }
-                ]
-            }
-        },
         "jsonPointer": {
             "type": "string",
             "pattern": "^(/[^/~]*(~[01][^/~]*)*)*$"

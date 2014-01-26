@@ -6,7 +6,15 @@ async = require("async")
 methods = require("methods")
 Router = require("express").Router
 jsonpatch = require("fast-json-patch")
-jsonpatchSchema = require("./jsonpatch")
+jsonpatch_schema = require("./jsonpatch")
+
+jsonpatch_url = 'https://raw.github.com/fge/sample-json-schemas/master/json-patch/json-patch.json'
+put_schema = 
+  type: "array"
+  items: 
+    $ref: jsonpatch_url
+
+tv4.addSchema jsonpatch_url, jsonpatch_schema
 
 http.IncomingMessage::real_method = ->
   override = @get("X-HTTP-Method-Override")
@@ -21,10 +29,11 @@ defaults =
   item_lookup: true
   item_methods: ["GET"]
   public_item_methods: []
+  item_uri_template: null
   authentication: false
   server_name: "localhost:5000"
-  url_prefix: ""
-  api_version: "",
+  url_prefix: null
+  api_version: null,
   blacklist_paths: []
   blacklist_paths_on_update: []
   blacklist_paths_on_create: []
@@ -159,6 +168,7 @@ module.exports = class Application
       resource_OPTIONS = (req, res) =>
         response = Object.clone(config.schema, true)
         response.links = []
+        response.definitions ||= {}
         
         resource_methods =
           "GET": 
@@ -176,9 +186,39 @@ module.exports = class Application
             rel: "destroy"
             href: resource_path
 
-        enabled_methods = config.resource_methods.union(config.public_methods)
-        for resource_method in enabled_methods when resource_method isnt "OPTIONS"
+        item_path = "#{resource_path}/#{config.item_uri_template}"
+        item_methods =
+          "GET":
+            method: "GET"
+            rel: "self"
+            href: item_path
+          "PUT":
+            method: "PUT"
+            rel: "update"
+            href: item_path
+            schema:
+              $ref: "#"
+          "PATCH":
+            method: "PATCH"
+            rel: "update"
+            href: item_path
+            schema:
+              $ref: "#/definitions/jsonpatch"
+          "DELETE":
+            method: "DELETE"
+            rel: "destroy"
+            href: item_path
+
+        enabled_resource_methods = config.resource_methods.union(config.public_methods)
+        for resource_method in enabled_resource_methods when resource_method isnt "OPTIONS"
           response.links.push(resource_methods[resource_method])
+
+        if config.item_lookup && config.item_uri_template?
+          enabled_item_methods = config.item_methods.union(config.public_item_methods)
+          for item_method in enabled_item_methods when item_method isnt "OPTIONS"
+            if item_method == "PATCH"
+              response.definitions.jsonpatch = put_schema
+            response.links.push(item_methods[item_method])
 
         res.json response
 
@@ -251,7 +291,7 @@ module.exports = class Application
             memo[0].push(null)
             callback(null, memo)
 
-        validation_result = tv4.validateMultiple(req.body, jsonpatchSchema)
+        validation_result = tv4.validateMultiple(req.body, put_schema)
         if validation_result.valid            
           @find resource, keys, req.machina, (err, results) ->
             if err

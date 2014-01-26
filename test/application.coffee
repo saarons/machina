@@ -255,6 +255,7 @@ describe "Application", ->
           schema: test_schema
           resource_methods: ["GET", "POST", "DELETE", "OPTIONS"]
           item_methods: ["GET", "PUT", "PATCH", "DELETE"]
+          item_uri_template: "{last_name}"
 
     describe "OPTIONS /<resource>", ->
       it "should return 200", (done) ->
@@ -443,7 +444,7 @@ describe "Application", ->
             done()
 
       it "should return 400 when the payload is not a JSON patch", (done) ->
-        payload = "BANANAS"
+        payload = ["BANANAS"]
 
         request(@app)
           .patch("/people/sam")
