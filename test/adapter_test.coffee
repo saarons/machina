@@ -30,3 +30,26 @@ describe "Adapter", ->
           .end ->
             expect(stub).calledWith("people", null, {}, sinon.match.func)
             done()
+
+    describe "GET /<resource>/<key>", ->
+      it "should call #find once", (done) ->
+        stub = sinon.stub()          
+
+        @adapter.find = stub.callsArgWith(3, null, [])
+
+        request(@app)
+          .get("/people/1")
+          .end ->
+            expect(stub).calledOnce
+            done()
+
+      it "should call #find with the proper arguments", (done) ->
+        stub = sinon.stub()          
+
+        @adapter.find = stub.callsArgWith(3, null, [])
+
+        request(@app)
+          .get("/people/1")
+          .end ->
+            expect(stub).calledWith("people", ["1"], {}, sinon.match.func)
+            done()        
