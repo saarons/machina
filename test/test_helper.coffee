@@ -24,12 +24,6 @@ module.exports =
     PATCH: "patch"
     DELETE: "del"
 
-  test_adapter:
-    find: (resource, keys, options, callback) -> callback(null, [{}])
-    update: (resource, key, object, options, callback) -> callback(null, object)
-    create: (resource, object, options, callback) -> callback(null, object)
-    delete: (resource, keys, options, callback) -> callback(null, true)
-
   test_schema:
     type: "object"
     properties:

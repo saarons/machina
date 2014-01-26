@@ -9,7 +9,7 @@ describe "Adapter", ->
       helpers.setup @
 
     describe "GET /<resource>", ->
-      it "should call #find once", (done) ->
+      it "should call #find once with proper arguments", (done) ->
         stub = sinon.stub()          
 
         @adapter.find = stub.callsArgWith(3, null, [])
@@ -18,21 +18,11 @@ describe "Adapter", ->
           .get("/people")
           .end ->
             expect(stub).calledOnce
-            done()
-
-      it "should call #find with the proper arguments", (done) ->
-        stub = sinon.stub()          
-
-        @adapter.find = stub.callsArgWith(3, null, [])
-
-        request(@app)
-          .get("/people")
-          .end ->
             expect(stub).calledWith("people", null, {}, sinon.match.func)
             done()
 
     describe "GET /<resource>/<key>", ->
-      it "should call #find once", (done) ->
+      it "should call #find once with proper arguments", (done) ->
         stub = sinon.stub()          
 
         @adapter.find = stub.callsArgWith(3, null, [])
@@ -41,15 +31,5 @@ describe "Adapter", ->
           .get("/people/1")
           .end ->
             expect(stub).calledOnce
-            done()
-
-      it "should call #find with the proper arguments", (done) ->
-        stub = sinon.stub()          
-
-        @adapter.find = stub.callsArgWith(3, null, [])
-
-        request(@app)
-          .get("/people/1")
-          .end ->
             expect(stub).calledWith("people", ["1"], {}, sinon.match.func)
-            done()        
+            done()
