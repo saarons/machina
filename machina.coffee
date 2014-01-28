@@ -111,6 +111,21 @@ module.exports = class Application
         resource_path = "/#{@options.api_version}" + resource_path if @options.api_version
         resource_path = "/#{@options.url_prefix}" + resource_path if @options.url_prefix
 
+        multi_response = (res, success_code, error_code) ->
+          (err, result) ->
+            [results, errors] = result
+
+            response = {}
+            response.errors = errors unless errors.isEmpty()
+            response[resource] = results
+
+            if errors.isEmpty()
+              res.send(success_code, response)
+            else if response[resource].every(null)
+              res.send(error_code, response)
+            else
+              res.send(207, response)
+
         resource_GET = (req, res) =>
           @find resource, null, req.machina, (err, results) ->
             if err
@@ -150,19 +165,7 @@ module.exports = class Application
               memo[0].push(null)
               callback(null, memo)
 
-          async.reduce req.body, [[],[]], createItem, (err, result) ->
-            [results, errors] = result
-
-            response = {}
-            response.errors = errors unless errors.isEmpty()
-            response[resource] = results
-
-            if errors.isEmpty()
-              res.send(201, response)
-            else if response[resource].every((x) -> x == null)
-              res.send(422, response)
-            else
-              res.send(207, response)
+          async.reduce req.body, [[],[]], createItem, multi_response(res, 201, 422)
 
         resource_OPTIONS = (req, res) =>
           response = Object.clone(config.schema, true)
@@ -300,21 +303,7 @@ module.exports = class Application
               if err
                 res.send(500)
               else
-                async.reduce results.zip(req.body, keys), [[],[]], updateItem, (err, result) ->
-                  [results, errors] = result
-
-                  response = {}
-                  response.errors = errors unless errors.isEmpty()
-                  response[resource] = results
-
-                  if errors.isEmpty()
-                    res.send(200, response)
-                  else if response[resource].every((x) -> x == null)
-                    res.send(422, response)
-                  else
-                    res.send(207, response)
-
-            res.send(200)
+                async.reduce results.zip(req.body, keys), [[],[]], updateItem, multi_response(res, 200, 422)
           else
             res.json(400, {errors: validation_result.errors})
 
@@ -346,19 +335,7 @@ module.exports = class Application
               memo[0].push(null)
               callback(null, memo)
 
-          async.reduce keys.zip(req.body), [[], []], updateItem, (err, result) ->
-            [results, errors] = result
-
-            response = {}
-            response.errors = errors unless errors.isEmpty()
-            response[resource] = results
-
-            if errors.isEmpty()
-              res.send(200, response)
-            else if response[resource].every((x) -> x == null)
-              res.send(422, response)
-            else
-              res.send(207, response)
+          async.reduce keys.zip(req.body), [[], []], updateItem, multi_response(res, 200, 422)
 
         item_DELETE = (req, res) =>
           keys = req.params.lookup.split(",")
