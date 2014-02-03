@@ -14,10 +14,22 @@ from both.
 express = require("express")
 Machina = require("machina")
 
+db = [
+  {id: "1", first_name: "Sam", last_name: "Aarons", age: 21},
+  {id: "2", first_name: "Etan", last_name: "Zapinsky", age: 22}
+]
+
 app = express()
 framework = new Machina
   adapter:
-    find: (resource, keys, options, callback) -> # Your app logic goes here
+    find: (resource, keys, options, callback) -> 
+      if keys
+        results = []
+        for record in db when keys.indexOf(record.id) > -1
+          results.push(record)
+        callback(null, results)
+      else
+        callback(null, db)
   resources:
     people: {}
 app.use(express.json())
