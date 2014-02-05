@@ -10,6 +10,8 @@ from both.
 
 ## Getting Started
 
+Put the following in a file such as ```server.coffee```:
+
 ```coffee
 express = require("express")
 Machina = require("machina")
@@ -34,4 +36,48 @@ framework = new Machina
     people: {}
 app.use(express.json())
 app.use(framework.router())
+app.listen(3000)
+```
+
+To run the server:
+
+    $ coffee server.coffee
+
+Now we can perform GET requests on the resource:
+
+
+    $ curl http://localhost:3000/people
+
+```json
+{
+  "people": [
+    {
+      "id": "1",
+      "first_name": "Sam",
+      "last_name": "Aarons",
+      "age": 21
+    },
+    {
+      "id": "2",
+      "first_name": "Etan",
+      "last_name": "Zapinsky",
+      "age": 22
+    }
+  ]
+}
+```
+
+    $ curl http://localhost:3000/people/1
+
+```json
+{
+  "people": [
+    {
+      "id": "1",
+      "first_name": "Sam",
+      "last_name": "Aarons",
+      "age": 21
+    }
+  ]
+}
 ```
