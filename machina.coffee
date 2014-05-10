@@ -3,8 +3,7 @@ require("sugar")
 tv4 = require("tv4")
 http = require("http")
 async = require("async")
-methods = require("methods")
-Router = require("express").Router
+express = require("express")
 jsonpatch = require("fast-json-patch")
 jsonpatch_schema = require("./jsonpatch")
 
@@ -31,9 +30,7 @@ defaults =
   public_item_methods: []
   item_uri_template: null
   authentication: false
-  server_name: "http://localhost:5000"
-  url_prefix: null
-  api_version: null,
+  mount_prefix: null
   blacklist_paths: []
   blacklist_paths_on_update: []
   blacklist_paths_on_create: []
@@ -97,19 +94,18 @@ module.exports = class Application
         res.send(405)
 
   build: ->
-    router = new Router
-      strict: false
-      caseSensitive: true
+    top_level_router = express.Router()
 
-    init = (req, res, next) ->
+    top_level_router.use (req, res, next) ->
       req.machina = {}
       next()
 
     for resource of @options.resources
       do (config = @config(resource)) =>
         resource_path = "/#{resource}"
-        resource_path = "/#{@options.api_version}" + resource_path if @options.api_version
-        resource_path = "/#{@options.url_prefix}" + resource_path if @options.url_prefix
+
+        router = express.Router()
+        top_level_router.use(resource_path, router)
 
         multi_response = (res, success_code, error_code) ->
           (err, result) ->
@@ -171,16 +167,19 @@ module.exports = class Application
           response = Object.clone(config.schema, true)
           response.links ||= []
           response.definitions ||= {}
+
+          actual_resource_path = resource_path
+          actual_resource_path = config.mount_prefix + resource_path if config.mount_prefix
           
           resource_methods =
             "GET": 
               method: "GET"
               rel: "instances"
-              href: resource_path
+              href: actual_resource_path
             "POST":
               method: "POST"
               rel: "create"
-              href: resource_path
+              href: actual_resource_path
               schema: 
                 type: "array"
                 items:
@@ -188,9 +187,9 @@ module.exports = class Application
             "DELETE":
               method: "DELETE"
               rel: "destroy"
-              href: resource_path
+              href: actual_resource_path
 
-          item_path = "#{resource_path}/#{config.item_uri_template}"
+          item_path = "#{actual_resource_path}/#{config.item_uri_template}"
           item_methods =
             "GET":
               method: "GET"
@@ -241,7 +240,6 @@ module.exports = class Application
         )
 
         resource_middleware = [
-          init,
           resource_method_not_allowed_middlware,
           resource_auth_middleware
         ]
@@ -252,9 +250,8 @@ module.exports = class Application
           "DELETE": resource_DELETE
           "OPTIONS": resource_OPTIONS
 
-        methods.each (method) ->
-          router[method] resource_path, resource_middleware, (req, res) -> 
-            resource_endpoints[req.real_method()](req, res)
+        router.route("/").all resource_middleware, (req, res, next) ->
+          resource_endpoints[req.real_method()](req, res)
 
         item_GET = (req, res) =>
           @find resource, req.params.lookup.split(","), req.machina, (err, results) ->
@@ -359,12 +356,10 @@ module.exports = class Application
         )
 
         item_middleware = [
-          init,
           item_method_not_allowed_middleware,
           item_auth_middleware
         ]
 
-        item_path = "#{resource_path}/:lookup"
         item_endpoints =
           "GET": item_GET
           "PUT": item_PUT
@@ -372,11 +367,11 @@ module.exports = class Application
           "DELETE": item_DELETE
           "OPTIONS": resource_OPTIONS
 
-        methods.each (method) ->
-          router[method] item_path, item_middleware, (req, res) -> 
-            item_endpoints[req.real_method()](req, res)
+        router.route("/:lookup").all item_middleware, (req, res, next) ->
+          item_endpoints[req.real_method()](req, res)
+            
 
-    router.middleware
+    return top_level_router
 
   router: ->
     @middleware ||= @build()

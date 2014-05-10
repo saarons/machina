@@ -6,6 +6,7 @@ chai.use(sinon_chai)
 
 express = require("express")
 Machina = require("../machina")
+bodyParser = require("body-parser")
 
 Assertion.addProperty 'error_response', (resource = "people") ->
   new Assertion(@_obj).to.contain.keys("errors", resource)
@@ -44,5 +45,5 @@ module.exports =
       adapter: context.adapter
       resources:
         people: context.settings
-    context.app.use(express.json())
+    context.app.use(bodyParser())
     context.app.use(context.machina.router())
