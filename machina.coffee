@@ -2,7 +2,7 @@ require("sugar")
 
 tv4 = require("tv4")
 http = require("http")
-async = require("async")
+_ = require("highland")
 express = require("express")
 jsonpatch = require("fast-json-patch")
 jsonpatch_schema = require("./jsonpatch")
@@ -108,19 +108,30 @@ module.exports = class Application
         top_level_router.use(resource_path, router)
 
         multi_response = (res, success_code, error_code) ->
-          (err, result) ->
-            [results, errors] = result
+          results = []
+          errors = []
 
-            response = {}
-            response.errors = errors unless errors.isEmpty()
-            response[resource] = results
+          (err, x, push, next) ->
+            if (err)
+              results.push(null)
+              errors.push(err)
+              next()
+            else if x == _.nil
+              response = {}
+              response.errors = errors unless errors.isEmpty()
+              response[resource] = results
 
-            if errors.isEmpty()
-              res.send(success_code, response)
-            else if response[resource].every(null)
-              res.send(error_code, response)
+              if errors.isEmpty()
+                res.send(success_code, response)
+              else if response[resource].every(null)
+                res.send(error_code, response)
+              else
+                res.send(207, response)
+
+              push(null, x)
             else
-              res.send(207, response)
+              results.push(x)
+              next()
 
         resource_GET = (req, res) =>
           @find resource, null, req.machina, (err, results) ->
@@ -139,29 +150,33 @@ module.exports = class Application
             res.send(status_code)
 
         resource_POST = (req, res) =>
-          createItem = (memo, item, callback) =>
-            patches = config.blacklist_paths_on_create.map (path) ->
-              {"op": "remove", path: path}
-
-            jsonpatch.apply(item, patches)
-
-            validation_result = tv4.validateMultiple(item, config.schema)
-
-            if validation_result.valid
-              @adapter.create resource, item, req.machina, (err, result) =>
-                if err
-                  memo[1].push(err)
-                  memo[0].push(null)
-                else
-                  @sanitize(resource, result)
-                  memo[0].push(result)
-                callback(null, memo)
+          createItem = (err, item, push, next) =>
+            if err
+              push(err)
+              next()
+            else if item == _.nil
+              push(null, item)
             else
-              memo[1].push validation_result.errors
-              memo[0].push(null)
-              callback(null, memo)
+              patches = config.blacklist_paths_on_create.map (path) ->
+                {"op": "remove", path: path}
 
-          async.reduce req.body, [[],[]], createItem, multi_response(res, 201, 422)
+              jsonpatch.apply(item, patches)
+
+              validation_result = tv4.validateMultiple(item, config.schema)
+
+              if validation_result.valid
+                @adapter.create resource, item, req.machina, (err, result) =>
+                  if err
+                    push(err)
+                  else
+                    @sanitize(resource, result)
+                    push(null, result)
+                  next()
+              else
+                push(validation_result.errors)
+                next()
+
+          _(req.body).consume(createItem).consume(multi_response(res, 201, 422)).resume()
 
         resource_OPTIONS = (req, res) =>
           response = Object.clone(config.schema, true)
@@ -266,33 +281,36 @@ module.exports = class Application
           req.machina.update = true
           keys = req.params.lookup.split(",")
 
-          updateItem = (memo, item, callback) =>
-            [object, patches, key] = item
-
-            patches.remove (operation) ->
-              config.blacklist_paths_on_update.some (path) ->
-                operation.path.startsWith(path)
-
-            if jsonpatch.apply(object, patches)
-              validation_result = tv4.validateMultiple(object, config.schema)
-              if validation_result.valid
-                @adapter.update resource, key, object, req.machina, (err, result) =>
-                  if err
-                    memo[1].push(err)
-                    memo[0].push(null)
-                  else
-                    @sanitize(resource, result)
-                    memo[0].push(result)
-
-                  callback(null, memo)
-              else
-                memo[1].push(validation_result.errors)
-                memo[0].push(null)
-                callback(null, memo)
+          updateItem = (err, item, push, next) =>
+            if err
+              push(err)
+              next()
+            else if item == _.nil
+              push(null, item)
             else
-              memo[1].push(false)
-              memo[0].push(null)
-              callback(null, memo)
+              [object, patches, key] = item
+
+              patches.remove (operation) ->
+                config.blacklist_paths_on_update.some (path) ->
+                  operation.path.startsWith(path)
+
+              if jsonpatch.apply(object, patches)
+                validation_result = tv4.validateMultiple(object, config.schema)
+                if validation_result.valid
+                  @adapter.update resource, key, object, req.machina, (err, result) =>
+                    if err
+                      push(err)
+                    else
+                      @sanitize(resource, result)
+                      push(null, result)
+
+                    next()
+                else
+                  push(validation_result.errors)
+                  next()
+              else
+                push(null, false)
+                next()
 
           validation_result = tv4.validateMultiple(req.body, put_schema)
           if validation_result.valid            
@@ -300,7 +318,7 @@ module.exports = class Application
               if err
                 res.send(500)
               else
-                async.reduce results.zip(req.body, keys), [[],[]], updateItem, multi_response(res, 200, 422)
+                _(results.zip(req.body, keys)).consume(updateItem).consume(multi_response(res, 200, 422)).resume()
           else
             res.json(400, {errors: validation_result.errors})
 
@@ -308,31 +326,35 @@ module.exports = class Application
           req.machina.update = true
           keys = req.params.lookup.split(",")
 
-          updateItem = (memo, item, callback) =>
-            [key, object] = item
-
-            patches = config.blacklist_paths_on_update.map (path) ->
-              {"op": "remove", path: path}
-
-            jsonpatch.apply(object, patches)
-
-            validation_result = tv4.validateMultiple(object, config.schema)
-            if validation_result.valid
-              @adapter.update resource, key, object, req.machina, (err, result) =>
-                if err
-                  memo[1].push(err)
-                  memo[0].push(null)
-                else
-                  @sanitize(resource, result)
-                  memo[0].push(result)
-
-                callback(null, memo)
+          updateItem = (err, item, push, next) =>
+            if err
+              push(err)
+              next()
+            else if item == _.nil
+              push(null, item)
             else
-              memo[1].push(validation_result.errors)
-              memo[0].push(null)
-              callback(null, memo)
+              [key, object] = item
 
-          async.reduce keys.zip(req.body), [[], []], updateItem, multi_response(res, 200, 422)
+              patches = config.blacklist_paths_on_update.map (path) ->
+                {"op": "remove", path: path}
+
+              jsonpatch.apply(object, patches)
+
+              validation_result = tv4.validateMultiple(object, config.schema)
+              if validation_result.valid
+                @adapter.update resource, key, object, req.machina, (err, result) =>
+                  if err
+                    push(err)
+                  else
+                    @sanitize(resource, result)
+                    push(null, result)
+
+                  next()
+              else
+                push(validation_result.errors)
+                next()
+
+          _(keys.zip(req.body)).consume(updateItem).consume(multi_response(res, 200, 422)).resume()
 
         item_DELETE = (req, res) =>
           keys = req.params.lookup.split(",")
