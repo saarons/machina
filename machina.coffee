@@ -101,7 +101,7 @@ module.exports = class Application
       next()
 
     for resource of @options.resources
-      do (config = @config(resource)) =>
+      do (resource, config = @config(resource)) =>
         resource_path = "/#{resource}"
 
         router = express.Router()
