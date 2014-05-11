@@ -4,7 +4,7 @@
   "description": "Express middleware that makes prototyping JSON REST APIs quick and relatively painless.",
   "main": "index.js",
   "scripts": {
-    "test": "mocha test/*_test.coffee --compilers coffee:coffee-script"
+    "test": "mocha test/*_test.coffee --compilers coffee:coffee-script/register"
   },
   "author": "Sam Aarons <samaarons@gmail.com>",
   "license": "MIT",
@@ -13,7 +13,7 @@
     "sugar": "1.4.1",
     "express": "4.1.2",
     "highland": "1.24.0",
-    "coffee-script": "1.6.3",
+    "coffee-script": "1.7.1",
     "fast-json-patch": "0.3.6"
   },
   "devDependencies": {
